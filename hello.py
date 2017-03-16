@@ -4,6 +4,10 @@ from flask import Flask, render_template
 from flask.ext.script import Manager
 app = Flask(__name__)
 #manager = Manager(app)
+# 使用Bootstrap模版
+from flask.ext.bootstrap import Bootstrap
+bootstrap = Bootstrap(app)
+
 @app.route('/')
 def index():
 	# return '<h1>Hello world!</h1>'
@@ -17,6 +21,14 @@ def user(name):
 @app.route('/error')
 def error():
 	return '<h1>Bad Request</h1>', 400
+
+@app.errorhandler(404)
+def page_not_found(e):
+	return render_template("404.html"), 404
+
+@app.errorhandler(500)
+def internal_server_error(e):
+	return render_template('500.html'), 500
 
 from flask import make_response
 @app.route('/response')

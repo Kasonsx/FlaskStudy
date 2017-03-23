@@ -1,9 +1,9 @@
 # render_template 模版
 from flask import Flask, render_template
+app = Flask(__name__)
 # 使用Flask-Script支持命令行选项
 from flask.ext.script import Manager
-
-app = Flask(__name__)
+manager = Manager(app)
 # 设置Flask-WTF
 app.config['SECRET_KEY'] = 'hard to guess string'
 # 配置数据库
@@ -29,12 +29,25 @@ def index():
 	# return '<h1>Hello world!</h1>'
 	form = NameForm()
 	if form.validate_on_submit():
-		old_name = session.get('name')
-		if old_name is not None and old_name != form.name.data:
-			flash('Looks like you have changed your name!')
+		user = User.query.filter_by(username=form.name.data).first()
+		if user is None:
+			user = User(username = form.name.data)
+			db.session.add(user)
+			session['known'] = False
+		else:
+			session['known'] = True
 		session['name'] = form.name.data
+		form.name.data = ''
 		return redirect(url_for('index'))
-	return render_template('index.html', form=form, name=session.get('name'), current_time=datetime.utcnow())
+	return render_template('index.html', form=form, name=session.get('name'), known=session.get('known', False))
+
+	# if form.validate_on_submit():
+	# 	old_name = session.get('name')
+	# 	if old_name is not None and old_name != form.name.data:
+	# 		flash('Looks like you have changed your name!')
+	# 	session['name'] = form.name.data
+	# 	return redirect(url_for('index'))
+	# return render_template('index.html', form=form, name=session.get('name'), current_time=datetime.utcnow())
 
 @app.route('/user/<name>')
 def user(name):
@@ -74,6 +87,8 @@ class Role(db.Model):
 	__tablename__ = 'roles'
 	id = db.Column(db.Integer, primary_key=True)
 	name = db.Column(db.String(64), unique=True)
+	users = db.relationship('User', backref='role')
+	#backref在关系的另一个模型中添加反向引用
 
 	def __repr__(self):
 		return '<Role %r>' %self.name
@@ -81,10 +96,22 @@ class User(db.Model):
 	__tablename__ = 'users'
 	id = db.Column(db.Integer, primary_key=True)
 	username = db.Column(db.String(64), unique=True, index=True)
+	role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
 
 	def __repr__(self):
 		return '<User %r>' % self.username
 
+# 集成Python Shell,为Shell命令添加一个上下文
+from flask.ext.script import Shell
+def make_shell_context():
+	return dict(app=app, db=db, User=User, Role=Role)
+	# 注册程序、数据库实例以及模型
+manager.add_command("shell", Shell(make_context=make_shell_context))
+
+from flask.ext.migrate import Migrate, MigrateCommand
+migrate = Migrate(app, db)
+manager.add_command('db', MigrateCommand)
+
 if __name__ == '__main__':
 	app.run(debug=True)
-	#manager.run()
+	manager.run()
